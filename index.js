@@ -1,56 +1,94 @@
 const express = require("express");
-const bodyParser = require("body-parser");
+const validator = require("validator");
+const { connectDB, Operation } = require("./db");
+
 const app = express();
-const port = process.env.PORT || 4000;
 
-// Middleware to parse JSON requests
-app.use(bodyParser.json());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Dummy user data
-const user = {
-  full_name: "John Doe",
-  dob: "17091999",
-  email: "john@xyz.com",
-  roll_number: "ABCD123",
-};
+// load env
+require("dotenv").config();
 
-// POST endpoint
-app.post("/bfhl", (req, res) => {
-  const requestData = req.body.data;
-  const response = {
-    is_success: true,
-    user_id: `${user.full_name}_${user.dob}`,
-    email: user.email,
-    roll_number: user.roll_number,
-    numbers: [],
-    alphabets: [],
-    highest_alphabet: [],
-  };
+// connect to database
+connectDB();
 
-  // Extract numbers and alphabets from the requestData
-  requestData.forEach((item) => {
-    if (typeof item === "string" && /^[A-Za-z]$/.test(item)) {
-      response.alphabets.push(item);
-      response.highest_alphabet = [item];
-    } else if (!isNaN(item)) {
-      response.numbers.push(item);
+// load models
+
+app.get("/bfhl", async (req, res) => {
+    try {
+        const data= await Operation.findOne({
+            roll_number: "RA2011003010764",
+        });
+        if (!data) throw new Error("Invalid Operation Code");
+        return res.status(200).json({
+            operation_code:data.operation_code,
+        });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({
+            error: err ? err : "Internal Server Error",
+        });
     }
-  });
-
-  res.json(response);
 });
 
-// GET endpoint
-app.get("/bfhl", (req, res) => {
-  res.status(200).json({ operation_code: 1 });
+app.post("/bfhl", async (req, res) => {
+    // my info
+    const user_id = "ojjuas_gupta_28032002";
+    const email = "og1640@srmist.edu.in";
+    const roll_number = "RA2011003010764";
+
+    // data
+    let alphabets = [];
+    let numbers = [];
+
+    try {
+        let resp = await Operation.findOne({ roll_number: "RA2011003010764" });
+        
+        if (resp && resp.operation_code) {
+            resp.operation_code++;
+            await resp.save();
+        } else {
+            const operation = new Operation({
+                roll_number,
+                operation_code: 1,
+            });
+            await operation.save();
+        }
+
+        const { data } = req.body;
+        await data.forEach((item) => {
+            if (validator.isAlpha(item)) alphabets.push(item);
+            else if (validator.isNumeric(item)) numbers.push(item);
+            else throw new Error("Invalid Data");
+        });
+        return res.status(200).json({
+            is_success: true,
+            user_id,
+            email,
+            roll_number,
+            numbers,
+            alphabets,
+        });
+    } catch (err) {
+        console.error("errr",err);
+        return res.status(400).json({
+            is_success: false,
+            user_id,
+            email,
+            roll_number,
+            numbers,
+            alphabets,
+        });
+    }
 });
 
-app.get("/", (req, res) => {
-  res.status(200).json({ message: "Welcome to BFHL!" });
+app.get("*", (req, res) => {
+    return res.status(404).json({
+        error: "Not Found",
+    });
 });
 
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+app.listen(process.env.PORT || 4000, () => {
+    console.log(`Server is running on port ${process.env.PORT || 4000}`);
 });
-
-module.exports = app;
